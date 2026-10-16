@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ENIGMA I — 交互式模拟器</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1e242c; --line:#2b333d;
+    --ink:#d8dee6; --dim:#8b96a4; --brass:#c9a227; --glow:#ffd257;
+    --red:#d8503f; --green:#4fae6a; --blue:#5b8dd6;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 700px at 50% -10%,#1a2029,#0b0e12 70%);
+    color:var(--ink); font:14px/1.5 "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    min-height:100vh;
+  }
+  header{padding:18px 22px 10px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:19px;letter-spacing:.16em;font-weight:600}
+  h1 span{color:var(--brass)}
+  header .sub{color:var(--dim);font-size:12.5px;margin-top:6px}
+  main{display:grid;grid-template-columns:minmax(360px,1fr) minmax(420px,1.15fr);gap:14px;padding:14px 22px 40px;align-items:start}
+  .panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+         border-radius:10px;padding:14px 16px}
+  .panel h2{margin:0 0 10px;font-size:12px;letter-spacing:.18em;color:var(--dim);font-weight:600;text-transform:uppercase}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .col{display:flex;flex-direction:column;gap:10px}
+
+  /* 转子 */
+  .rotor{background:#12161c;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center;width:104px}
+  .rotor .win{font:700 30px/1 "Consolas",monospace;background:linear-gradient(180deg,#f3e7c8,#cbbd97);
+    color:#1a1a12;border-radius:6px;padding:8px 0;margin:6px 0;cursor:pointer;user-select:none;
+    box-shadow:inset 0 -2px 0 #8d8266, 0 1px 6px rgba(0,0,0,.6)}
+  .rotor .win:active{transform:translateY(1px)}
+  .rotor select,.rotor input{width:100%;background:#0d1116;color:var(--ink);border:1px solid var(--line);
+    border-radius:5px;padding:3px;font-size:12px}
+  .rotor .tag{font-size:10px;color:var(--dim);letter-spacing:.1em}
+  .notch{height:4px;border-radius:2px;background:#333c47;margin-top:6px}
+  .notch.on{background:var(--red);box-shadow:0 0 8px var(--red)}
+
+  /* 灯板与键盘 */
+  .lampboard,.keyboard{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:5px}
+  .lamp{aspect-ratio:1;border-radius:50%;background:#10141a;border:1px solid #29313b;
+    display:flex;align-items:center;justify-content:center;font:600 12px/1 Consolas,monospace;color:#3c4653}
+  .lamp.on{background:radial-gradient(circle at 35% 30%,#fff5cf,var(--glow));color:#241d05;
+    border-color:#8a7420;box-shadow:0 0 14px rgba(255,210,87,.75)}
+  .key{aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 40% 30%,#2c343e,#161b21);
+    border:1px solid #39424e;color:var(--ink);font:600 12px/1 Consolas,monospace;cursor:pointer;padding:0}
+  .key:hover{border-color:var(--brass);color:var(--brass)}
+  .key:active{transform:translateY(1px)}
+  .key.dim{opacity:.25}
+
+  /* 插线板 */
+  .plugwrap{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+  .socket{display:flex;align-items:center;gap:8px;background:#12161c;border:1px solid var(--line);
+    border-radius:6px;padding:3px 7px;cursor:pointer;user-select:none}
+  .socket:hover{border-color:#4c5866}
+  .socket .hole{width:13px;height:13px;border-radius:50%;background:#080a0d;border:2px solid #333c47}
+  .socket.sel{border-color:var(--brass);box-shadow:0 0 10px rgba(201,162,39,.35)}
+  .socket.plugged .hole{border-color:var(--brass);background:var(--brass)}
+  .socket .lbl{font:600 12px/1 Consolas,monospace}
+  .socket .pair{color:var(--dim);font:600 11px/1 Consolas,monospace}
+
+  /* I/O */
+  textarea{width:100%;background:#0d1116;color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:9px;font:13px/1.6 Consolas,monospace;resize:vertical;letter-spacing:.14em}
+  .btn{background:linear-gradient(180deg,#252d37,#1a2028);color:var(--ink);border:1px solid #3a444f;
+    border-radius:7px;padding:6px 12px;cursor:pointer;font-size:12.5px}
+  .btn:hover{border-color:var(--brass);color:var(--brass)}
+  .btn.primary{background:linear-gradient(180deg,#7a6316,#5d4b10);border-color:#a98c22;color:#fff3cd}
+  .trace{font:12px/1.7 Consolas,monospace;color:var(--dim);word-break:break-all;max-height:66px;overflow:auto}
+  .trace b{color:var(--brass);font-weight:600}
+  .status{font:12px/1.6 Consolas,monospace;color:var(--dim);white-space:pre-wrap}
+  .ok{color:var(--green)} .bad{color:var(--red)}
+  input[type=text]{background:#0d1116;color:var(--ink);border:1px solid var(--line);border-radius:6px;
+    padding:6px 8px;font:12.5px Consolas,monospace;letter-spacing:.14em;width:100%}
+  .bar{height:7px;background:#0d1116;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7a6316,var(--glow))}
+  .hint{font-size:11.5px;color:#6f7a88}
+  @media (max-width:980px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ENIGMA <span>I</span> — 交互式模拟器</h1>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>转子字母窗 / Walzen</h2>
+    <div class="row" id="rotor-bank"></div>
+    <div class="row" style="margin-top:12px">
+      <div class="col" style="flex:1">
+        <label class="tag">步进轨迹（每次按键前的位置）</label>
+        <div class="trace" id="trace">—</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>机械设置 / Mechanik</h2>
+    <div class="hint" style="margin-bottom:10px">真机上藏在机器内部、从字母窗看不见的设置。改这里不会动字母窗，但会改变加密结果。</div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="col" style="width:210px">
+        <label class="tag">机型</label>
+        <select id="model">
+          <option value="3">Enigma I / M3 · 三转子</option>
+          <option value="4">Enigma M4 · 四转子（鲨鱼）</option>
+        </select>
+      </div>
+      <div class="col" style="width:130px">
+        <label class="tag">反射器 UKW</label>
+        <select id="reflector"></select>
+      </div>
+    </div>
+    <div class="col" id="mech-rotors"></div>
+    <div class="status" id="mech-status" style="margin-top:8px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>灯板 / 键盘</h2>
+    <div class="lampboard" id="lampboard"></div>
+    <div style="height:12px"></div>
+    <div class="keyboard" id="keyboard"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btn-selftest">运行自检</button>
+      <button class="btn" id="btn-random">随机密钥</button>
+      <div class="status" id="selftest" style="flex:1"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>插线板 / Steckerbrett</h2>
+    <div class="plugwrap" id="plugboard"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btn-unplug">拔掉所有线</button>
+      <span class="hint">点两个字母用一根线连起来；点已连接的孔可以拔线</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>报文</h2>
+    <div class="col">
+      <label class="tag">输入（明文或密文）</label>
+      <textarea id="plain" rows="3" placeholder="WETTERVORHERSAGE"></textarea>
+      <div class="row">
+        <button class="btn primary" id="btn-run">加密 / 解密</button>
+        <button class="btn" id="btn-swap">↑ 输出搬到输入</button>
+        <button class="btn" id="btn-rewind">↺ 回到起始位置</button>
+        <button class="btn" id="btn-clear">清空</button>
+        <button class="btn" id="btn-copy">复制结果</button>
+      </div>
+      <div class="status" id="io-info"></div>
+      <label class="tag">输出</label>
+      <textarea id="cipher" rows="3" readonly></textarea>
+    </div>
+  </section>
+
+  <section class="panel" style="grid-column:1/-1">
+    <h2>发报 / 收报 — 密钥本 + 一次一密的消息密钥</h2>
+    <div class="row" style="align-items:flex-end">
+      <div class="col" style="width:130px">
+        <label class="tag">密钥表行号</label>
+        <input type="text" id="m-keyid" value="D314">
+      </div>
+      <div class="col" style="width:150px">
+        <label class="tag">日报基准位置 G</label>
+        <input type="text" id="m-base" value="AAA" maxlength="3">
+      </div>
+      <div class="col" style="flex:1;min-width:260px">
+        <label class="tag">电报报文 wire</label>
+        <input type="text" id="m-wire" placeholder="EN1/D314/KLH/…">
+      </div>
+      <button class="btn primary" id="btn-send">发报：明文 → 报文</button>
+      <button class="btn primary" id="btn-recv">收报：报文 → 明文</button>
+    </div>
+    <div class="row" style="margin-top:10px;align-items:flex-end">
+      <div class="col" style="flex:1;min-width:300px">
+        <label class="tag">密钥本（导出给对方 / 粘贴对方的）</label>
+        <input type="text" id="kb-code" placeholder="EK1/C/V-IV-I/JFB/BTX/BJ-MS-OR-TL-YZ/XXXX">
+      </div>
+      <button class="btn" id="btn-kb-export">导出我的密钥本</button>
+      <button class="btn primary" id="btn-kb-import">导入密钥本</button>
+    </div>
+    <div class="status" id="kb-info" style="margin-top:8px"></div>
+    <div class="status" id="m-info" style="margin-top:8px"></div>
+  </section>
+
+  <section class="panel bombe" style="grid-column:1/-1">
+    <h2>炸弹机 / Bombe — 已知明文攻击</h2>
+    <div class="hint" style="margin-bottom:10px;max-width:900px">
+      如果你能猜到密文里某一段明文（crib，比如德军每天固定格式的天气播报），就能反推出转子的起始位置和插线板。
+      炸弹机遍历所有转子起始位置，用 crib 把字母之间的对应关系连成一张约束网（menu），逐个假设往下推；
+      只要推出矛盾（某字母插到自己、或与已定的伙伴冲突）就立刻淘汰，剩下能通过整条密文验证的，就是真密钥。
+      四转子（M4）时外层还要多轮 26 个薄转子位置——搜索量正好是三转子的 26 倍。
+    </div>
+    <div class="row" style="align-items:flex-end">
+      <div class="col" style="flex:1;min-width:180px">
+        <label class="tag">密文</label>
+        <input type="text" id="b-cipher" placeholder="MFUUSXNNBSKGJUUAYUBAGQZOUUPJCLFWMVWOCWXGHYVKITPTHKICALYZQJEBNSQSYV">
+      </div>
+      <div class="col" style="flex:1;min-width:160px">
+        <label class="tag">猜到的明文片段 crib</label>
+        <input type="text" id="b-crib" value="WETTERVORHERSAGEFUERMORGEN">
+      </div>
+      <div class="col" style="width:150px">
+        <label class="tag">转子序（左→右）</label>
+        <input type="text" id="b-order" value="I II III">
+      </div>
+      <div class="col" style="width:110px">
+        <label class="tag">环位</label>
+        <input type="text" id="b-rings" value="AAA">
+      </div>
+      <div class="col" style="width:104px">
+        <label class="tag">crib 偏移</label>
+        <input type="text" id="b-offset" placeholder="留空=全扫">
+      </div>
+      <button class="btn primary" id="btn-crack">开始搜索</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="bar" style="flex:1"><i id="b-bar"></i></div>
+      <div class="status" id="b-status" style="min-width:250px"></div>
+    </div>
+    <div class="status" id="b-result" style="margin-top:8px"></div>
+  </section>
+</main>
+
+<script>
+/* ============================ 机器内核 ============================ */
+const A = 65;
+
+const ROTORS = {
+  // 名称: [布线, 缺口字母；VI–VIII 有两个缺口 M 和 Z]
+  // 数据来源：Tony Sale（布莱切利园博物馆原馆长）转子规格页
+  // https://www.codesandciphers.org.uk/enigma/rotorspec.htm
+  I:    ["EKMFLGDQVZNTOWYHXUSPAIBRCJ", "Q"],
+  II:   ["AJDKSIRUXBLHWTMCQGZNPYFVOE", "E"],
+  III:  ["BDFHJLCPRTXVZNYEIWGAKMUSQO", "V"],
+  IV:   ["ESOVPZJAYQUIRHXLNFTGKDCMWB", "J"],
+  V:    ["VZBRGITYUPSDNHLXAWMJQOFECK", "Z"],
+  VI:   ["JPGVOUMFYQBENHZRDKASXLICTW", "MZ"],
+  VII:  ["NZJHGRCXMYSWBOUFAIVLPEKQDT", "MZ"],
+  VIII: ["FKQHTLXOCBJSPDZRAMEWNIUYGV", "MZ"],
+  // 薄转子（M4 专用）：只能装在第四个位置，没有缺口，加密过程中永不步进
+  Beta:  ["LEYJVCNIXWPBQMDRTAKZGFUHOS", ""],
+  Gamma: ["FSOKANUERHMBTIYCWLQPZXVGJD", ""],
+};
+const REFLECTORS = {
+  B: "YRUHQSLDPXNGOKMIEBFZCWVJAT",
+  C: "FVPJIAOYEDRZXWGCTKUQSBNMHL",
+  // 薄反射器（M4 专用）
+  "B-Thin": "ENKQAUYWJICOPBLMDXZVFTHRGS",
+  "C-Thin": "RDOBJNTKVEHMLFCWZAXGYIPSUQ",
+};
+const THIN_ROTORS = ["Beta", "Gamma"];
+const THIN_REFLECTORS = ["B-Thin", "C-Thin"];
+
+class Rotor {
+  constructor(name, ring = 0, position = 0) {
+    const [wiring, notchLetters] = ROTORS[name];
+    this.name = name;
+    this.forward = [...wiring].map(c => c.charCodeAt(0) - A);
+    this.backward = new Array(26);
+    this.forward.forEach((v, i) => { this.backward[v] = i; });
+    // 缺口可能不止一个（VI–VIII 是 M 和 Z），薄转子一个都没有
+    this.notches = new Set([...notchLetters].map(c => c.charCodeAt(0) - A));
+    this.ring = ring;
+    this.position = position;
+  }
+  get offset() { return ((this.position - this.ring) % 26 + 26) % 26; }
+  advance() { this.position = (this.position + 1) % 26; }
+  atNotch() { return this.notches.has(this.position); }
+  f(x) { const o = this.offset; return ((this.forward[(x + o) % 26] - o) % 26 + 26) % 26; }
+  b(x) { const o = this.offset; return ((this.backward[(x + o) % 26] - o) % 26 + 26) % 26; }
+}
+
+/* 把薄转子折进反射器：薄转子不动 ⟹ M4 ≡ 一台换了反射器的三转子机 */
+function foldedReflector(thinName, thinRing, thinPosition, reflectorName) {
+  const thin = new Rotor(thinName, thinRing.charCodeAt(0) - A, thinPosition.charCodeAt(0) - A);
+  const base = [...REFLECTORS[reflectorName]].map(c => c.charCodeAt(0) - A);
+  return base.map((_, x) => thin.b(base[thin.f(x)]));
+}
+
+class Enigma {
+  /* 约定：rotors / rings / positions 均按"左→右"给出（历史文件记载的写法），
+     内部按"右→左"存放，因为步进与信号都从右转子开始。 */
+  constructor({ rotors = ["I", "II", "III"], reflector = "B",
+                rings = "AAA", positions = "AAA", plugboard = [],
+                reflectorOverride = null } = {}) {
+    this.rotorNames = rotors.slice();
+    this.reflectorName = reflector;
+    this.rings = rings;
+    const leftToRight = rotors.map((n, i) => [n, rings.charCodeAt(i) - A, positions.charCodeAt(i) - A]);
+    this.rotors = leftToRight.slice().reverse().map(([n, r, p]) => new Rotor(n, r, p));
+    this.reflector = (reflectorOverride
+      ? reflectorOverride.slice()
+      : [...REFLECTORS[reflector]].map(c => c.charCodeAt(0) - A));
+    this.setPlugs(plugboard);
+  }
+  setPlugs(pairs) {
+    this.plug = Array.from({ length: 26 }, (_, i) => i);
+    this.plugPairs = [];
+    for (const [a, b] of pairs) {
+      const x = a.charCodeAt(0) - A, y = b.charCodeAt(0) - A;
+      this.plug[x] = y; this.plug[y] = x;
+      this.plugPairs.push([x, y]);
+    }
+  }
+  step() {
+    // 只有最右边三个转子参与步进；最左边的薄转子（M4）保持原地不动
+    const right = this.rotors[0], middle = this.rotors[1], left = this.rotors[2];
+    if (middle.atNotch()) { middle.advance(); left.advance(); }   // double step
+    else if (right.atNotch()) { middle.advance(); }
+    right.advance();
+  }
+  scramble(x) {                       // 转子 + 反射器，不含插线板；对合
+    for (const r of this.rotors) x = r.f(x);
+    x = this.reflector[x];
+    for (let i = this.rotors.length - 1; i >= 0; i--) x = this.rotors[i].b(x);
+    return x;
+  }
+  encryptChar(ch) {
+    this.step();
+    const idx = ch.charCodeAt(0) - A;
+    return String.fromCharCode(this.plug[this.scramble(this.plug[idx])] + A);
+  }
+  encrypt(text) {
+    let out = "";
+    for (const ch of String(text).toUpperCase()) {
+      if (ch >= "A" && ch <= "Z") out += this.encryptChar(ch);
+    }
+    return out;
+  }
+  get positions() { return this.rotors.slice().reverse().map(r => String.fromCharCode(r.position + A)).join(""); }
+  setPositions(str) {
+    const ltr = [...str.toUpperCase()].slice(0, 3).map(c => c.charCodeAt(0) - A);
+    this.rotors.slice().reverse().forEach((r, i) => { r.position = ltr[i]; });
+  }
+  get notchFlags() { return this.rotors.slice().reverse().map(r => r.position === r.notch); }
+  clone() {
+    const pairs = this.plugPairs.map(([x, y]) => [String.fromCharCode(x + A), String.fromCharCode(y + A)]);
+    return new Enigma({ rotors: this.rotorNames, reflector: this.reflectorName,
+                        rings: this.rings, positions: this.positions, plugboard: pairs });
+  }
+}
+
+/* ---- 自检：与 Python 版（enigma.py 的 selftest()）同一套断言，
+        10 项、顺序与标签均一致，两边输出可以逐行对照 ---- */
+function engineSelftest() {
+  const lines = [];
+  let ok = true;
+  const check = (name, passed, detail = "") => {
+    ok = ok && passed;
+    lines.push(`[${passed ? "PASS" : "FAIL"}] ${name}  ${detail}`);
+  };
+
+  const vector = new Enigma({ rotors: ["I", "II", "III"], reflector: "B", rings: "AAA", positions: "AAA" });
+  const got = vector.encrypt("AAAAA");
+  check("标准向量 AAAAA", got === "BDZGO", `→ ${got}（期望 BDZGO）`);
+
+  const plug = [["A", "M"], ["F", "I"], ["N", "V"]];
+  const cfg = { rotors: ["IV", "II", "V"], reflector: "C", rings: "KLM", positions: "QWE" };
+  const cipher = new Enigma({ ...cfg, plugboard: plug }).encrypt("WETTERVORHERSAGE");
+  const back = new Enigma({ ...cfg, plugboard: plug }).encrypt(cipher);
+  check("对合性 E(E(x))=x", back === "WETTERVORHERSAGE", `→ ${back}`);
+
+  let fixed = null;
+  for (const positions of ["AAA", "QRS", "XYZ", "KDO", "ZZZ"]) {
+    for (const rings of ["AAA", "BCD"]) {
+      const m = new Enigma({ rotors: ["I", "II", "III"], reflector: "B", rings, positions });
+      for (let i = 0; i < 26; i++) {
+        const ch = String.fromCharCode(A + i);
+        if (m.encryptChar(ch) === ch) fixed = [positions, rings, ch];
+      }
+    }
+  }
+  check("无不动点（不加密成自己）", fixed === null, fixed ? JSON.stringify(fixed) : "26 字母 × 10 组设置");
+
+  // 4) double-stepping 的指纹：转子周期 = 26*25*26
+  const m = new Enigma({ rotors: ["I", "II", "III"], reflector: "B", rings: "AAA", positions: "AAA" });
+  let steps = 0;
+  do { m.step(); steps++; } while (m.positions !== "AAA" && steps < 100000);
+  check("转子周期（double step）", steps === 16900, `→ ${steps} 步回到 AAA（26³=17576）`);
+
+  // 5) 双缺口转子：VI–VIII 的换档点在 A 和 N，即缺口 M 和 Z
+  const doubleNotch = ["VI", "VII", "VIII"].every(name => {
+    const s = new Rotor(name).notches;
+    return s.size === 2 && s.has(12) && s.has(25);
+  });
+  const singleNotch = ["I", "II", "III", "IV", "V"].every(name => new Rotor(name).notches.size === 1);
+  check("VI–VIII 双缺口 M/Z", doubleNotch && singleNotch, "I–V 单缺口，VI–VIII 两个");
+
+  // 6) M4 的薄转子永不步进
+  const m4 = new Enigma({ rotors: ["Beta", "V", "VI", "VIII"], reflector: "B-Thin",
+                          rings: "AAAA", positions: "AAAA" });
+  const thinStart = m4.rotors[3].position;
+  m4.encrypt("WETTERVORHERSAGEFUERMORGEN");
+  check("薄转子永不步进", m4.rotors[3].position === thinStart, "跑完 26 个字母后仍在 A 位");
+
+  // 7) M4 的转子周期仍是 16900（薄转子不动，周期由三个动转子决定）
+  //    注意必须用单缺口转子：16900 这个数只在单缺口时成立。
+  const m4b = new Enigma({ rotors: ["Beta", "IV", "II", "V"], reflector: "B-Thin",
+                           rings: "AAAA", positions: "AAAA" });
+  steps = 0;
+  do { m4b.step(); steps++; } while (m4b.positions !== "AAAA" && steps < 100000);
+  check("M4 转子周期（单缺口）", steps === 16900, `→ ${steps} 步回到 AAAA`);
+
+  // 8) 双缺口会破坏"步进是一个置换"：缺口不止一个时，从 AAAA 出发的轨道
+  //    不再回到 AAAA（单缺口时周期恰好 16900）。这是 VI–VIII 的真实后果。
+  const m4c = new Enigma({ rotors: ["Beta", "V", "VI", "VIII"], reflector: "B-Thin",
+                           rings: "AAAA", positions: "AAAA" });
+  const seen = new Set();
+  let returned = false;
+  for (let i = 0; i < 30000; i++) {
+    m4c.step();
+    const state = m4c.positions;
+    if (state === "AAAA") { returned = true; break; }
+    if (seen.has(state)) break;
+    seen.add(state);
+  }
+  check("双缺口使步进不再是置换", !returned,
+        `轨道长度 ${seen.size}，不回起点（单缺口时为 16900）`);
+
+  // 9) 最关键的一条：M3 兼容模式不变量
+  //    官方说明——把薄转子 β 拨到 A 位、配薄反射器 b，M4 就等同于一台 M3。
+  //    这一条同时钉住了两批独立公布的常量（Tony Sale 的布线表 + Crypto Museum 的用法说明）。
+  const folded = foldedReflector("Beta", "A", "A", "B-Thin");
+  const normalB = [...REFLECTORS.B].map(c => c.charCodeAt(0) - A);
+  check("β@A + 薄反射器 b ≡ 普通 UKW B", folded.every((v, i) => v === normalB[i]),
+        "折叠后的等效反射器与 UKW B 逐位相同");
+
+  // 10) 四转子在兼容模式下必须跑出三转子的结果
+  const four = new Enigma({ rotors: ["Beta", "IV", "II", "V"], reflector: "B-Thin",
+                            rings: "AAAA", positions: "AAAA" });
+  const three = new Enigma({ rotors: ["IV", "II", "V"], reflector: "B",
+                             rings: "AAA", positions: "AAA" });
+  const text = "WETTERVORHERSAGEFUERMORGEN";
+  const fourOut = four.encrypt(text), threeOut = three.encrypt(text);
+  check("四转子跑出三转子结果", fourOut === threeOut, `${fourOut.slice(0, 16)}…`);
+
+  return { ok, lines };
+}
+
+/* ============================ 界面 ============================ */
+const LETTERS = [...Array(26)].map((_, i) => String.fromCharCode(A + i));
+
+const state = {
+  model: 3,                     // 3 = Enigma I/M3，4 = Enigma M4
+  rotors: ["I", "II", "III"],   // 左→右；M4 时第一个是薄转子
+  rings: "AAA",
+  positions: "AAA",
+  reflector: "B",
+  plugs: [],                    // [["A","M"], ...]
+  selected: null,
+};
+let machine = null;
+
+const $ = id => document.getElementById(id);
+const rotorBankEl = $("rotor-bank"), lampboardEl = $("lampboard"),
+      keyboardEl = $("keyboard"), plugboardEl = $("plugboard"),
+      traceEl = $("trace"), plainEl = $("plain"), cipherEl = $("cipher");
+
+function rebuild() {
+  // 防护：positions 长度必须与转子个数一致，否则转子位置会变成 NaN
+  const count = state.rotors.length;
+  state.positions = (state.positions + "A".repeat(count)).slice(0, count);
+  machine = new Enigma({
+    rotors: state.rotors, reflector: state.reflector,
+    rings: state.rings, positions: state.positions, plugboard: state.plugs,
+  });
+}
+
+function normalRotors() { return Object.keys(ROTORS).filter(n => !THIN_ROTORS.includes(n)); }
+
+function refreshReflectorOptions() {
+  const options = state.model === 4 ? THIN_REFLECTORS : ["B", "C"];
+  $("reflector").innerHTML = options.map(r => `<option>${r}</option>`).join("");
+  $("reflector").value = state.reflector;
+}
+
+function rotorLabels() {
+  return state.model === 4
+    ? ["薄转子", "左转子", "中转子", "右转子"]
+    : ["左转子", "中转子", "右转子"];
+}
+
+/* 字母窗：只放"看得见的"部分——位置窗口（点一下前进一格）+ 缺口指示灯 */
+function buildRotorBank() {
+  rotorBankEl.innerHTML = "";
+  const labels = rotorLabels();
+  state.rotors.forEach((name, i) => {
+    const box = document.createElement("div");
+    box.className = "rotor";
+    box.innerHTML =
+      `<div class="tag">${labels[i]}</div>
+       <div class="win" data-role="win" data-i="${i}">A</div>
+       <div class="notch" data-role="notch" data-i="${i}"></div>`;
+    rotorBankEl.appendChild(box);
+  });
+
+  rotorBankEl.querySelectorAll('[data-role="win"]').forEach(win => {
+    win.addEventListener("click", () => {
+      // 手动转轮：点一下前进一格
+      const i = +win.dataset.i;
+      const j = state.model - 1 - i;      // 左→右 索引 → 内部 右→左 索引
+      machine.rotors[j].position = (machine.rotors[j].position + 1) % 26;
+      state.positions = machine.positions;
+      refresh();
+    });
+  });
+}
+
+/* 机械设置：型号 + 环位（每个转子一行），这些从字母窗看不见 */
+function buildMechSettings() {
+  const wrap = $("mech-rotors");
+  wrap.innerHTML = "";
+  const labels = rotorLabels();
+  state.rotors.forEach((name, i) => {
+    const isThin = state.model === 4 && i === 0;
+    const choices = isThin ? THIN_ROTORS : normalRotors();
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.alignItems = "center";
+    row.innerHTML =
+      `<span class="tag" style="width:56px">${labels[i]}</span>
+       <select data-role="type" data-i="${i}" style="width:96px">
+         ${choices.map(n => `<option ${n === name ? "selected" : ""}>${n}</option>`).join("")}
+       </select>
+       <select data-role="ring" data-i="${i}" style="width:64px">
+         ${LETTERS.map(l => `<option ${l === state.rings[i] ? "selected" : ""}>${l}</option>`).join("")}
+       </select>
+       <span class="hint">型号 / 环位</span>`;
+    wrap.appendChild(row);
+  });
+
+  wrap.querySelectorAll("select").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const i = +sel.dataset.i;
+      state.positions = machine ? machine.positions : state.positions;
+      if (sel.dataset.role === "type") state.rotors[i] = sel.value;
+      else state.rings = state.rings.slice(0, i) + sel.value + state.rings.slice(i + 1);
+      rebuild(); refresh();
+      // 可见反馈：机械设置从窗口看不出来，这里明确回显已生效
+      $("mech-status").innerHTML =
+        `<span class="ok">已生效</span> ${labels[i]} · 型号 <b>${state.rotors[i]}</b>`
+        + ` · 环位 <b>${state.rings[i]}</b>`;
+    });
+  });
+}
+
+function updateTrace(before, after) {
+  const line = `${before}<b>→</b>${after}`;
+  const old = traceEl.dataset.raw ? traceEl.dataset.raw.split("|") : [];
+  old.push(line);
+  const kept = old.slice(-8);
+  traceEl.dataset.raw = kept.join("|");
+  traceEl.innerHTML = kept.join("  ");
+}
+
+function refresh() {
+  if (!machine) rebuild();
+  const pos = machine.positions;
+  const notches = machine.notchFlags;
+  rotorBankEl.querySelectorAll('[data-role="win"]').forEach(win => {
+    win.textContent = pos[+win.dataset.i];
+  });
+  rotorBankEl.querySelectorAll('[data-role="notch"]').forEach(el => {
+    el.classList.toggle("on", notches[+el.dataset.i]);
+  });
+}
+
+function buildMachine() {
+  for (let i = 0; i < 26; i++) {
+    const ch = LETTERS[i];
+    const lamp = document.createElement("div");
+    lamp.className = "lamp"; lamp.id = "lamp-" + ch; lamp.textContent = ch;
+    lampboardEl.appendChild(lamp);
+
+    const key = document.createElement("button");
+    key.className = "key"; key.id = "key-" + ch; key.textContent = ch;
+    key.addEventListener("click", () => pressKey(ch));
+    keyboardEl.appendChild(key);
+  }
+}
+
+let lampTimer = null;
+function flashLamp(ch) {
+  document.querySelectorAll(".lamp.on").forEach(el => el.classList.remove("on"));
+  const lamp = $("lamp-" + ch);
+  if (lamp) lamp.classList.add("on");
+}
+
+function pressKey(ch) {
+  if (!machine) rebuild();
+  const before = machine.positions;
+  const out = machine.encryptChar(ch);
+  const after = machine.positions;
+  cipherEl.value += out;
+  updateTrace(before, after);
+  state.positions = after;
+  flashLamp(out);
+  refresh();
+  $("io-info").innerHTML =
+    `手动按键会推进转子，当前窗口 <b>${after}</b>。`
+    + `要用整段方式解密，先点「↺ 回到起始位置」。`;
+}
+
+let lastStart = null;   // 上一次整段处理所用的起始位置（也就是密钥）
+
+function buildPlugboard() {
+  plugboardEl.innerHTML = "";
+  const order = [...LETTERS.slice(0, 13), ...LETTERS.slice(13)];
+  order.forEach((ch, index) => {
+    if (index === 13) { /* 第二列开始 */ }
+    const row = document.createElement("div");
+    row.className = "socket"; row.dataset.ch = ch;
+    row.innerHTML = `<span class="hole"></span><span class="lbl">${ch}</span><span class="pair"></span>`;
+    row.addEventListener("click", () => plugClick(ch));
+    plugboardEl.appendChild(row);
+  });
+  renderPlugs();
+}
+
+function plugClick(ch) {
+  const existing = state.plugs.findIndex(p => p.includes(ch));
+  if (state.selected === null) {
+    if (existing >= 0) state.plugs.splice(existing, 1);     // 拔线
+    else state.selected = ch;
+  } else if (state.selected === ch) {
+    state.selected = null;
+  } else {
+    if (existing < 0) state.plugs.push([state.selected, ch]);
+    state.selected = null;
+  }
+  rebuild(); renderPlugs(); refresh();
+}
+
+function renderPlugs() {
+  plugboardEl.querySelectorAll(".socket").forEach(el => {
+    const ch = el.dataset.ch;
+    const pair = state.plugs.find(p => p.includes(ch));
+    el.classList.toggle("plugged", !!pair);
+    el.classList.toggle("sel", state.selected === ch);
+    el.querySelector(".pair").textContent = pair ? "—" + pair.find(x => x !== ch) : "";
+  });
+}
+
+function randomKey() {
+  const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(v => v[1]);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const count = state.model;
+  const core = shuffle(normalRotors()).slice(0, 3);
+  state.rotors = count === 4 ? [pick(THIN_ROTORS), ...core] : core;
+  state.reflector = count === 4 ? pick(THIN_REFLECTORS) : pick(["B", "C"]);
+  const randN = k => shuffle(LETTERS).slice(0, k).join("");
+  state.rings = randN(count);
+  state.positions = randN(count);
+  const pool = shuffle(LETTERS);
+  state.plugs = [];
+  const plugCount = 3 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < plugCount; i++) state.plugs.push([pool[2 * i], pool[2 * i + 1]]);
+  state.selected = null;
+  $("m-base").value = state.positions;
+  $("m-base").maxLength = count;
+  refreshReflectorOptions();
+  rebuild(); buildRotorBank(); buildMechSettings(); renderPlugs(); refresh();
+  cipherEl.value = ""; traceEl.dataset.raw = ""; traceEl.textContent = "—";
+}
+
+function init() {
+  refreshReflectorOptions();
+  $("reflector").addEventListener("change", () => {
+    state.positions = machine.positions;
+    state.reflector = $("reflector").value;
+    rebuild(); refresh();
+  });
+
+  $("model").addEventListener("change", () => {
+    const count = +$("model").value;
+    state.model = count;
+    state.rotors = count === 4 ? ["Beta", "V", "VI", "VIII"] : ["I", "II", "III"];
+    state.reflector = count === 4 ? "B-Thin" : "B";
+    state.rings = "A".repeat(count);
+    state.positions = "A".repeat(count);
+    state.selected = null;
+    $("m-base").value = "A".repeat(count);
+    $("m-base").maxLength = count;
+    refreshReflectorOptions();
+    rebuild(); buildRotorBank(); buildMechSettings(); renderPlugs(); refresh();
+    $("mech-status").innerHTML =
+      `<span class="ok">已切换</span> 机型 <b>${count === 4 ? "M4 四转子" : "M3 三转子"}</b>`;
+  });
+
+  $("m-base").maxLength = state.model;
+  buildRotorBank(); buildMechSettings(); buildMachine(); buildPlugboard();
+  rebuild(); refresh();
+
+  $("btn-run").addEventListener("click", () => {
+    // 整段处理做成纯函数：处理完把转子复位到起始位置，
+    // 于是"再点一次"就是解密（历史上也是先对准当日密钥再收发）。
+    const start = machine.positions;
+    const out = machine.encrypt(plainEl.value);
+    const end = machine.positions;
+    cipherEl.value = out;                 // 替换，不追加
+    machine.setPositions(start);          // 复位
+    state.positions = start;
+    lastStart = start;
+    refresh();
+    $("io-info").innerHTML =
+      `起始 <b>${start}</b> → 结束 <b>${end}</b>，窗口已复位到 <b>${start}</b>。`
+      + `把密文搬回输入框再点一次即可解密。`;
+  });
+  $("btn-swap").addEventListener("click", () => {
+    plainEl.value = cipherEl.value;
+    cipherEl.value = "";
+  });
+  $("btn-rewind").addEventListener("click", () => {
+    machine.setPositions(lastStart || state.positions);
+    state.positions = machine.positions;
+    refresh();
+    $("io-info").innerHTML = `窗口已复位到起始位置 <b>${state.positions}</b>。`;
+  });
+  $("btn-clear").addEventListener("click", () => {
+    plainEl.value = ""; cipherEl.value = "";
+    traceEl.dataset.raw = ""; traceEl.textContent = "—";
+  });
+  $("btn-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(cipherEl.value); $("btn-copy").textContent = "已复制"; }
+    catch (e) { $("btn-copy").textContent = "复制失败"; }
+    setTimeout(() => $("btn-copy").textContent = "复制结果", 1200);
+  });
+  $("btn-random").addEventListener("click", randomKey);
+  $("btn-unplug").addEventListener("click", () => { state.plugs = []; state.selected = null; rebuild(); renderPlugs(); });
+  $("btn-selftest").addEventListener("click", () => {
+    const res = engineSelftest();
+    $("selftest").innerHTML = `<span class="${res.ok ? "ok" : "bad"}">${res.lines.join("\n")}</span>`;
+  });
+
+  document.addEventListener("keydown", ev => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const tag = (ev.target.tagName || "").toLowerCase();
+    if (tag === "textarea" || tag === "input") return;
+    const ch = ev.key.toUpperCase();
+    if (ch.length === 1 && ch >= "A" && ch <= "Z") { ev.preventDefault(); pressKey(ch); }
+  });
+}
+
+init();
+
+/* ============================ 炸弹机 ============================ */
+class RotorBank {
+  constructor(names, rings) {
+    const namesRtl = names.slice().reverse();
+    const ringsRtl = rings.split("").reverse();
+    // 缺口可能不止一个（VI–VIII 是 M 和 Z）
+    this.notches = namesRtl.map(n => new Set([...ROTORS[n][1]].map(c => c.charCodeAt(0) - A)));
+    this.rings = ringsRtl.map(c => c.charCodeAt(0) - A);
+    this.wiring = namesRtl.map(n => [...ROTORS[n][0]].map(c => c.charCodeAt(0) - A));
+    this.inverse = this.wiring.map(w => { const b = new Array(26); w.forEach((v, i) => { b[v] = i; }); return b; });
+  }
+  advance(pos) {
+    let [right, middle, left] = pos;
+    if (this.notches[1].has(middle)) { middle = (middle + 1) % 26; left = (left + 1) % 26; }
+    else if (this.notches[0].has(right)) { middle = (middle + 1) % 26; }
+    right = (right + 1) % 26;
+    return [right, middle, left];
+  }
+  offsets(pos) { return pos.map((p, i) => ((p - this.rings[i]) % 26 + 26) % 26); }
+  scramble(offs, refl, x) {
+    for (let i = 0; i < offs.length; i++) x = ((this.wiring[i][(x + offs[i]) % 26] - offs[i]) % 26 + 26) % 26;
+    x = refl[x];
+    for (let i = offs.length - 1; i >= 0; i--) x = ((this.inverse[i][(x + offs[i]) % 26] - offs[i]) % 26 + 26) % 26;
+    return x;
+  }
+}
+
+function prepareMenu(pairs) {
+  const menu = new Map();
+  pairs.forEach(([p, c], index) => {
+    if (!menu.has(p)) menu.set(p, []);
+    menu.get(p).push([index, c]);
+    if (!menu.has(c)) menu.set(c, []);
+    menu.get(c).push([index, p]);
+  });
+  let inputLetter = -1, best = -1;
+  menu.forEach((edges, letter) => { if (edges.length > best) { best = edges.length; inputLetter = letter; } });
+  return { menu, inputLetter };
+}
+
+/* 单个偏移、给定（已折好反射器的）三转子核心上做搜索，分片执行避免卡住界面 */
+function searchCore(coreNames, coreRings, refl, pairs, offset, onProgress, onDone) {
+  const bank = new RotorBank(coreNames, coreRings);
+  const { menu, inputLetter } = prepareMenu(pairs);
+  const stops = [];
+  const TOTAL = 17576;
+  let cursor = 0;
+
+  function tick() {
+    const until = Math.min(cursor + 300, TOTAL);
+    for (let s = cursor; s < until; s++) {
+      let state = [Math.floor(s / 676) % 26, Math.floor(s / 26) % 26, s % 26];
+      for (let k = 0; k < offset + 1; k++) state = bank.advance(state);
+      const offsetsAt = [];
+      for (let i = 0; i < pairs.length; i++) { offsetsAt.push(bank.offsets(state)); state = bank.advance(state); }
+
+      const cache = new Map();
+      const S = (index, x) => {
+        const key = index * 26 + x;
+        let v = cache.get(key);
+        if (v === undefined) { v = bank.scramble(offsetsAt[index], refl, x); cache.set(key, v); }
+        return v;
+      };
+
+      for (let guess = 0; guess < 26; guess++) {
+        const partner = new Array(26).fill(-1);
+        partner[inputLetter] = guess;
+        partner[guess] = inputLetter;
+        const stack = [inputLetter, guess];
+        let dead = false;
+        while (stack.length && !dead) {
+          const letter = stack.pop();
+          const known = partner[letter];
+          const edges = menu.get(letter);
+          if (!edges) continue;
+          for (const [index, other] of edges) {
+            const implied = S(index, known);
+            const current = partner[other];
+            if (current === -1) {
+              if (partner[implied] !== -1 && partner[implied] !== other) { dead = true; break; }
+              partner[other] = implied;
+              partner[implied] = other;
+              stack.push(other);
+              if (implied !== other) stack.push(implied);
+            } else if (current !== implied) { dead = true; break; }
+          }
+        }
+        if (!dead) stops.push([state0(s), partner]);
+      }
+    }
+    cursor = until;
+    onProgress(cursor / TOTAL);
+    if (cursor < TOTAL) setTimeout(tick, 0);
+    else onDone(stops);
+  }
+  const state0 = s => [Math.floor(s / 676) % 26, Math.floor(s / 26) % 26, s % 26];
+  tick();
+}
+
+function plugsFromPartner(partner) {
+  const pairs = [];
+  for (let i = 0; i < 26; i++) if (partner[i] > i) pairs.push([LETTERS[i], LETTERS[partner[i]]]);
+  return pairs;
+}
+
+let crackRunning = false;
+function runCrack() {
+  if (crackRunning) return;
+  crackRunning = true;
+  const cipher = $("b-cipher").value.toUpperCase().replace(/[^A-Z]/g, "");
+  const crib = $("b-crib").value.toUpperCase().replace(/[^A-Z]/g, "");
+  // 转子名大小写不敏感：输入框里写 Beta/Gamma 或 beta/gamma 都认
+  const rotorLookup = name =>
+    Object.keys(ROTORS).find(k => k.toUpperCase() === name.toUpperCase());
+  const order = $("b-order").value.trim().split(/\s+/).map(rotorLookup);
+  const rings = $("b-rings").value.toUpperCase().replace(/[^A-Z]/g, "");
+  const reflector = $("reflector").value;
+  const status = $("b-status"), result = $("b-result"), bar = $("b-bar");
+  const fourRotor = order.length === 4;
+
+  if ((order.length !== 3 && order.length !== 4) || order.some(n => !ROTORS[n])
+      || rings.length !== order.length || !crib.length || cipher.length < crib.length) {
+    status.innerHTML = '<span class="bad">参数不合法：转子序 3 个（I II III）或 4 个（Beta V VI VIII），'
+      + '环位个数要与转子一致，crib 不能长于密文</span>';
+    crackRunning = false; return;
+  }
+  if (fourRotor && !THIN_ROTORS.includes(order[0])) {
+    status.innerHTML = '<span class="bad">四转子的第一位必须是薄的 Beta 或 Gamma</span>';
+    crackRunning = false; return;
+  }
+
+  const survivors = [];
+  const fixedOffset = $("b-offset").value.trim();
+  if (fixedOffset !== "") {
+    const value = Number(fixedOffset);
+    if (!Number.isInteger(value) || value < 0 || value + crib.length > cipher.length) {
+      status.innerHTML = '<span class="bad">crib 偏移不合法</span>';
+      crackRunning = false; return;
+    }
+    survivors.push(value);
+  } else {
+    for (let offset = 0; offset + crib.length <= cipher.length; offset++) {
+      let ok = true;
+      for (let i = 0; i < crib.length; i++) if (crib[i] === cipher[offset + i]) { ok = false; break; }
+      if (ok) survivors.push(offset);
+    }
+  }
+  if (!survivors.length) {
+    status.innerHTML = '<span class="bad">没有任何偏移能让 crib 满足"不加密成自己"，说明 crib 猜错了</span>';
+    crackRunning = false; return;
+  }
+
+  const thinFactor = fourRotor ? 26 : 1;
+  const coreNames = fourRotor ? order.slice(1) : order;
+  const coreRings = fourRotor ? rings.slice(1) : rings;
+  status.textContent = `转子序 ${order.join(" ")} / 环位 ${rings} / 反射器 ${reflector}；`
+    + (fixedOffset !== "" ? `只搜索偏移 ${survivors[0]}（共 ${cipher.length - crib.length + 1} 个）`
+                          : `crib 拖动：${cipher.length - crib.length + 1} 个偏移中 ${survivors.length} 个通过筛选`)
+    + (fourRotor ? `；M4 四转子：外层还要轮 26 个薄转子位置（搜索量 ×26）` : "")
+    + "，开始搜索…";
+  result.textContent = "";
+  bar.style.width = "0%";
+
+  const startedAt = performance.now();
+  const hypothesesTotal = survivors.length * thinFactor * 17576 * 26;
+  let index = 0, totalStops = 0;
+  const hits = [];
+
+  const positionsOf = start => (start.length === 4
+    ? String.fromCharCode(start[0] + A)
+      + start.slice(1).reverse().map(p => String.fromCharCode(p + A)).join("")
+    : start.slice().reverse().map(p => String.fromCharCode(p + A)).join(""));
+
+  const finish = () => {
+    const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+    let html = `<b>共测试 ${hypothesesTotal.toLocaleString()} 个假设`
+      + `（${survivors.length} 偏移 × ${thinFactor === 26 ? "26 薄转子位置 × " : ""}17576 × 26），`
+      + `产生 ${totalStops} 个 stop，验证通过 ${hits.length} 个，用时 ${seconds}s</b><br>`;
+    if (hits.length) {
+      for (const [offset, positions, plugs, text] of hits) {
+        html += `唯一密钥：crib 偏移 ${offset} / 起始 ${positions}`
+          + (fourRotor ? `（薄转子 ${positions[0]}）` : "")
+          + ` / 插线 ` + plugs.map(p => p.join("")).join(" ") + `<br>破译全文：${text}`;
+      }
+      status.innerHTML = '<span class="ok">命中</span>';
+    } else {
+      html += '<span class="bad">没有任何 stop 能通过解密验证——换个 crib 或转子序再试</span>';
+      status.innerHTML = '<span class="bad">未命中</span>';
+    }
+    result.innerHTML = html;
+    crackRunning = false;
+  };
+
+  /* 一个偏移：四转子时外层轮 26 个薄转子位置，每个位置折叠出一个等效反射器 */
+  const runOffset = (offset, onDone) => {
+    const pairs = [...crib].map((p, i) => [p.charCodeAt(0) - A, cipher[offset + i].charCodeAt(0) - A]);
+    const collected = [];
+    let thinIndex = 0;
+    const nextThin = () => {
+      if (thinIndex >= thinFactor) { onDone(collected); return; }
+      const refl = fourRotor
+        ? foldedReflector(order[0], rings[0], LETTERS[thinIndex], reflector)
+        : [...REFLECTORS[reflector]].map(c => c.charCodeAt(0) - A);
+      searchCore(coreNames, coreRings, refl, pairs, offset,
+        progress => {
+          bar.style.width = (((index + (thinIndex + progress) / thinFactor) / survivors.length) * 100).toFixed(1) + "%";
+        },
+        stops => {
+          for (const [start3, partner] of stops) {
+            collected.push([fourRotor ? [thinIndex, ...start3] : start3, partner]);
+          }
+          thinIndex++;
+          nextThin();
+        });
+    };
+    nextThin();
+  };
+
+  const nextOffset = () => {
+    if (index >= survivors.length) { finish(); return; }
+    const offset = survivors[index];
+    runOffset(offset, stops => {
+      totalStops += stops.length;
+      for (const [start, partner] of stops) {
+        const positions = positionsOf(start);
+        const plugs = plugsFromPartner(partner);
+        const trial = new Enigma({ rotors: order, reflector, rings, positions, plugboard: plugs });
+        const plain = trial.encrypt(cipher);
+        if (plain.slice(offset, offset + crib.length) === crib) {
+          hits.push([offset, positions, plugs, plain]);
+        }
+      }
+      index++;
+      nextOffset();
+    });
+  };
+  nextOffset();
+}
+
+/* ============================ 发报 / 收报 ============================
+   唯一的预共享秘密 = 密钥本（行号 → 转子序 / 环位 / 插线板 / 基准位置 G）。
+   报文本身只携带：行号 + 用 G 加密过的消息密钥 + 用消息密钥加密的正文。
+   消息密钥一次一换，绝不重复使用同一个起点。
+   注意：这里是"一次加密"消息密钥，故意不同于历史上的双重加密
+   （正是那个重复给了 Rejewski 用轮换结构反推布线的机会）。
+   ==================================================================== */
+function pairList() { return state.plugs.map(p => [p[0], p[1]]); }
+
+function machineAt(positions, plugs) {
+  return new Enigma({
+    rotors: state.rotors, reflector: state.reflector, rings: state.rings,
+    positions: positions, plugboard: plugs || pairList(),
+  });
+}
+
+function randomLetters(count) {
+  return Array.from({ length: count },
+    () => LETTERS[Math.floor(Math.random() * 26)]).join("");
+}
+
+/* 3 字母校验组：Enigma 本身没有任何完整性保护，这是额外加的 */
+function checkGroup(text) {
+  let a = 7, b = 11, c = 13;
+  const s = text.replace(/[^A-Z]/g, "");
+  for (let i = 0; i < s.length; i++) {
+    const v = s.charCodeAt(i) - A;
+    a = (a * 31 + v) % 26;
+    b = (b * 17 + v + i) % 26;
+    c = (c * 7 + v * (i + 1) + 5) % 26;
+  }
+  return LETTERS[a] + LETTERS[b] + LETTERS[c];
+}
+
+function basePositions() {
+  const count = state.model;
+  const raw = ($("m-base").value || "").toUpperCase().replace(/[^A-Z]/g, "");
+  return (raw + "A".repeat(count)).slice(0, count);
+}
+
+function sendWire() {
+  const info = $("m-info");
+  const base = basePositions();
+  const keyid = $("m-keyid").value.replace(/[^A-Za-z0-9]/g, "").toUpperCase() || "D0";
+  const body = plainEl.value.toUpperCase().replace(/[^A-Z]/g, "");
+  if (!body) { info.innerHTML = '<span class="bad">「输入」框里没有明文，先写点什么</span>'; return; }
+
+  // 消息密钥的长度必须与机型一致：M3 是 3 个字母，M4 是 4 个（含薄转子）
+  const messageKey = randomLetters(state.model);
+  const keyBlock = machineAt(base).encrypt(messageKey);      // 用日报基准位置加密消息密钥
+  const check = checkGroup(body);
+  const cipher = machineAt(messageKey).encrypt(check + body); // 用消息密钥加密（校验组+正文）
+  const wire = `EN1/${keyid}/${keyBlock}/${cipher}`;
+  $("m-wire").value = wire;
+  $("m-keyid").value = keyid;
+  cipherEl.value = wire;
+  info.innerHTML =
+    `日报密钥：转子 <b>${state.rotors.join(" ")}</b> · 环位 <b>${state.rings}</b> · `
+    + `基准位置 <b>${base}</b> · 插线 <b>${state.plugs.map(p => p.join("")).join(" ") || "无"}</b><br>`
+    + `本报消息密钥 <b>${messageKey}</b> → 用 G 加密成密钥块 <b>${keyBlock}</b>；`
+    + `正文校验组 <b>${check}</b><br>`
+    + `报文已生成，整串 <code>EN1/…</code> 发给对方即可（密钥本必须另行安全送达）。`;
+}
+
+function recvWire() {
+  const info = $("m-info");
+  const wire = $("m-wire").value.trim().toUpperCase().replace(/\s+/g, "");
+  const parts = wire.split("/");
+  if (parts.length !== 4 || parts[0] !== "EN1") {
+    info.innerHTML = '<span class="bad">报文格式应为 EN1/行号/密钥块/正文</span>'; return;
+  }
+  const keyid = parts[1], keyBlock = parts[2], cipher = parts[3];
+  const base = basePositions();
+  const messageKey = machineAt(base).encrypt(keyBlock);       // 先解出消息密钥
+  if (messageKey.length !== state.model) {                    // 收到的报文来自另一种机型
+    info.innerHTML = '<span class="bad">型号不匹配</span>：本报文的消息密钥是 '
+      + `${messageKey.length} 个字母，而当前机型是 ${state.model} 转子。`;
+    return;
+  }
+  const plain = machineAt(messageKey).encrypt(cipher);        // 再解正文
+  const check = plain.slice(0, 3);
+  const body = plain.slice(3);
+  const expect = checkGroup(body);
+  cipherEl.value = body;
+  info.innerHTML =
+    `密钥表行号 <b>${keyid}</b> · 基准位置 <b>${base}</b> → 解出消息密钥 <b>${messageKey}</b><br>`
+    + `正文校验组 ${check}，重算应为 ${expect} → `
+    + (check === expect
+        ? '<b class="ok">校验通过</b>，明文已写入「输出」框。'
+        : '<b class="bad">校验不通过</b>：日报密钥（转子序/环位/基准位置/插线板）与发报方不一致，或报文被改动过。');
+}
+
+$("btn-send").addEventListener("click", sendWire);
+$("btn-recv").addEventListener("click", recvWire);
+
+/* ============ 密钥本导出 / 导入 ============
+   把"预共享秘密"（反射器/转子序/环位/基准位置G/插线板）打包成一串，
+   末 4 位是指纹，双方口头核对即可确认没抄错、没被掉包。
+   报文本身不携带这些，所以收信人必须先导入同一份密钥本才能解密。
+   =========================================== */
+function plugString() { return state.plugs.map(p => p.join("")).join("-"); }
+
+function canonicalKey() {
+  return [state.reflector, state.rotors.join("-"), state.rings,
+          basePositions(), plugString() || "NONE"].join("/");
+}
+
+function keyFingerprint(canonical) {
+  canonical = canonical.toUpperCase();
+  let a = 3, b = 5, c = 7, d = 11;
+  for (let i = 0; i < canonical.length; i++) {
+    const v = canonical.charCodeAt(i) % 32;
+    a = (a * 31 + v + i) % 26;
+    b = (b * 37 + v * 3 + i) % 26;
+    c = (c * 41 + v * 7 + 2 * i) % 26;
+    d = (d * 43 + v * 11 + 3 * i) % 26;
+  }
+  return LETTERS[a] + LETTERS[b] + LETTERS[c] + LETTERS[d];
+}
+
+function applyKeyBook({ reflector, rotors, rings, base, plugs }) {
+  state.model = rotors.length;
+  state.reflector = reflector;
+  state.rotors = rotors.slice();
+  state.rings = rings;
+  state.plugs = plugs.map(p => [p[0], p[1]]);
+  state.selected = null;
+  state.positions = base;
+  $("model").value = String(rotors.length);
+  $("m-base").value = base;
+  $("m-base").maxLength = rotors.length;
+  refreshReflectorOptions();
+  rebuild(); buildRotorBank(); buildMechSettings(); renderPlugs(); refresh();
+}
+
+function exportKeyBook() {
+  const canonical = canonicalKey();
+  const fp = keyFingerprint(canonical);
+  $("kb-code").value = `EK1/${canonical}/${fp}`;
+  $("kb-info").innerHTML =
+    `已导出。把这整串发给对方；末 4 位指纹 <b>${fp}</b>，双方核对一致即可确认是同一份密钥本。`;
+}
+
+function importKeyBook() {
+  const info = $("kb-info");
+  const parts = $("kb-code").value.trim().toUpperCase().split("/");
+  if (parts.length !== 7 || parts[0] !== "EK1") {
+    info.innerHTML = '<span class="bad">密钥本格式应为 EK1/反射器/转子序/环位/基准位置/插线板/指纹</span>';
+    return;
+  }
+  const reflector = Object.keys(REFLECTORS).find(k => k.toUpperCase() === parts[1]);
+  const rotorLookup = name => Object.keys(ROTORS).find(k => k.toUpperCase() === name.toUpperCase());
+  const rotorNames = parts[2].split("-");
+  const rotors = rotorNames.map(rotorLookup);
+  const isThin = name => THIN_ROTORS.some(t => t.toUpperCase() === name);
+  const rings = parts[3], base = parts[4], plugs = parts[5], fp = parts[6];
+
+  const sizeOk = rotors.length === 3 || rotors.length === 4;
+  const namesOk = rotors.every(Boolean)
+    && (rotors.length === 3
+        ? rotorNames.every(n => !isThin(n))
+        : (isThin(rotorNames[0]) && rotorNames.slice(1).every(n => !isThin(n))));
+  if (!REFLECTORS[reflector] || !sizeOk || !namesOk
+      || rings.length !== rotors.length || base.length !== rotors.length) {
+    info.innerHTML = '<span class="bad">密钥本里有不合法的反射器/转子/环位/基准位置'
+      + '（三转子用 I–V，四转子第一位必须是 Beta 或 Gamma）</span>';
+    return;
+  }
+  let pairs = [];
+  if (plugs !== "NONE") {
+    if (!/^([A-Z]{2})(-[A-Z]{2})*$/.test(plugs)) {
+      info.innerHTML = '<span class="bad">插线板部分格式不对（应如 AM-FI-NV 或 NONE）</span>';
+      return;
+    }
+    pairs = plugs.split("-").map(p => [p[0], p[1]]);
+    const used = pairs.flat();
+    if (new Set(used).size !== used.length || pairs.some(p => p[0] === p[1])) {
+      info.innerHTML = '<span class="bad">插线板里同一个字母出现了两次</span>';
+      return;
+    }
+  }
+  if (rotors.length === 4 !== THIN_REFLECTORS.includes(reflector)) {
+    info.innerHTML = '<span class="bad">机型与反射器不匹配</span>：四转子要用 B/C Thin，三转子要用 B/C。';
+    return;
+  }
+  const canonical = [reflector, parts[2], rings, base, plugs].join("/");
+  const expect = keyFingerprint(canonical);
+  if (expect !== fp) {
+    info.innerHTML = `<span class="bad">指纹不符</span>：重算应为 <b>${expect}</b>，码里却是 <b>${fp}</b>，别用它通信。`;
+    return;
+  }
+  applyKeyBook({ reflector, rotors, rings, base, plugs: pairs });
+  info.innerHTML = `<b class="ok">已导入并核对指纹 ${fp}</b>：反射器 ${reflector} · 转子 ${rotors.join(" ")} · `
+    + `环位 ${rings} · 基准位置 ${base} · 插线板 ${plugs}。现在可以直接「收报」了。`;
+}
+
+$("btn-kb-export").addEventListener("click", exportKeyBook);
+$("btn-kb-import").addEventListener("click", importKeyBook);
+
+$("btn-crack").addEventListener("click", runCrack);
+$("b-cipher").value = "MFUUSXNNBSKGJUUAYUBAGQZOUUPJCLFWMVWOCWXGHYVKITPTHKICALYZQJEBNSQSYV";
+
+window.addEventListener("error", ev => {
+  const el = document.getElementById("selftest");
+  if (el) el.innerHTML = '<span class="bad">JS 错误: ' + ev.message + "  @行 " + ev.lineno + "</span>";
+});
+</script>
+</body>
+</html>

@@ -327,8 +327,7 @@ EK1 / <反射器> / <转子序> / <环位> / <基准位置> / <插线板> / <指
 
 ## 致谢与数据来源
 
-- **中国科大词元计划（Supercomputing Center of USTC）**——感谢为本项目的开发提供高性能 AI 基础设施服务。
-  We appreciate the Supercomputing Center of USTC for providing high-performance AI infrastructure services.
+- **中国科大词元计划**： We appreciate the Supercomputing Center of USTC for providing high-performance AI infrastructure services.
 - **转子布线与反射器规格**：依据公开历史资料整理，主要参考 Tony Sale 的转子规格页 [codesandciphers.org.uk/enigma/rotorspec.htm](https://www.codesandciphers.org.uk/enigma/rotorspec.htm) 与 [Crypto Museum](https://www.cryptomuseum.com/crypto/enigma/) 的公开档案。这些布线是历史事实，不属于任何人的版权。
 
 ---
